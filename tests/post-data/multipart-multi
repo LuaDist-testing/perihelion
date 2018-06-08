@@ -1,0 +1,19 @@
+Content-Type: multipart/form-data; boundary=AaA444
+
+--AaA444
+Content-Disposition: form-data; name="variable1"
+
+This is value #1
+--AaA444
+Content-Disposition: form-data; name="variable2"
+
+This is value #2
+--AaA444
+Content-Disposition: form-data; name="username"
+
+nginx
+--AaA444
+Content-Disposition: form-data; name="foo"
+
+bar
+--AaA444
