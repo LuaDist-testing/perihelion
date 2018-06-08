@@ -551,6 +551,7 @@ function test_post_urlencoded_multi()
 			assert.is_table(web.POST)
 			assert.is_equal('true', web.POST.item1)
 			assert.is_equal('3432', web.POST.secondthing)
+			
 			return web.POST
 			
 	end, finish }
@@ -575,13 +576,14 @@ function test_post_multipart()
 		function( web ) 
 			
 			assert.is_table(web.POST)
-			assert.is_equal('This is value #1', web.POST.variable1)
+			assert.is_equal('This is the only value', web.POST.variable)
+			
 			return web.POST
 			
 	end, finish }
 	
 	local req = request( "POST", "/location", nil, "", "multipart-single")
-	req.CONTENT_TYPE = 'multipart/form-data'
+	req.CONTENT_TYPE = 'multipart/form-data; boundary=xxXXxx'
 	
 	local x, y, z = ph.run( req )
 	assert_200(x, y, z)
@@ -605,12 +607,73 @@ function test_post_multipart_many()
 			assert.is_equal('This is value #2', web.POST.variable2)
 			assert.is_equal('nginx', web.POST.username)
 			assert.is_equal('bar', web.POST.foo)
+			
 			return web.POST
 			
 	end, finish }
 	
 	local req = request( "POST", "/location", nil, "", "multipart-multi")
-	req.CONTENT_TYPE = 'multipart/form-data'
+	req.CONTENT_TYPE = 'multipart/form-data; boundary=AaA444'
+	
+	local x, y, z = ph.run( req )
+	assert_200(x, y, z)
+
+end
+
+
+--
+-- Test that a post request is properly handled when type multipart,
+-- with multiple vars
+--
+function test_post_multipart_windowslines()
+
+	local ph = perihelion.new()
+	
+	ph:post "/location" { 
+		function( web ) 
+
+			assert.is_table(web.POST)
+			assert.is_equal('https://some.url.to/somewhere', web.POST.destination)
+			assert.is_equal('download', web.POST.ltype)
+			
+			return web.POST
+			
+	end, finish }
+	
+	local req = request( "POST", "/location", nil, "", "multipart-realworld")
+	req.CONTENT_TYPE = 'multipart/form-data; boundary=---------------------------1629258943897431117981499424'
+	
+	local x, y, z = ph.run( req )
+	assert_200(x, y, z)
+
+end
+
+
+--
+-- Test that a post request can contain a file.
+--
+function test_post_multipart_hasfile()
+
+	local ph = perihelion.new()
+	
+	ph:post "/location" { 
+		function( web ) 
+
+			assert.is_table(web.POST)
+			assert.is_equal('upload', web.POST.ltype)
+			
+			assert.is_table(web.FILE)
+			assert.is_table(web.FILE.data)
+			assert.is_equal('text/plain', web.FILE.data['CONTENT-TYPE'])
+			assert.is_equal('posted_file.txt', web.FILE.data.FILENAME)
+			assert.is_equal('This is a basic text file.', web.FILE.data.DATA)
+			
+			return web.POST
+			
+	end, finish }
+	
+	local req = request( "POST", "/location", nil, "", "multipart-file")
+	req.CONTENT_TYPE = 'multipart/form-data; boundary=---------------------------1090342838421765724384886199'
 	
 	local x, y, z = ph.run( req )
 	assert_200(x, y, z)
@@ -1073,6 +1136,8 @@ describe("Perihelion", function()
 	it( "urlencoded POST with multiple arguments is properly handled", test_post_urlencoded_multi )
 	it( "multipart encoded POST is properly handled", test_post_multipart )
 	it( "multipart encoded POST works, multiple vars", test_post_multipart_many )
+	it( "multipart encoded POST works, windows lines", test_post_multipart_windowslines)
+	it( "multipart encoded POST works, with a file", test_post_multipart_hasfile )
 	it( "can route calls via patterns", test_pattern_single )
 	it( "pattern routes still handle GET strings just fine", test_pattern_querystring )
 	it( "routing via patterns matches well, and not everything", test_pattern_failures )

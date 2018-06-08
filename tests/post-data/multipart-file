@@ -1,0 +1,15 @@
+-----------------------------1090342838421765724384886199
+Content-Disposition: form-data; name="destination"
+
+https://i.imgur.com/ueVufIX.jpg
+-----------------------------1090342838421765724384886199
+Content-Disposition: form-data; name="ltype"
+
+upload
+-----------------------------1090342838421765724384886199
+Content-Disposition: form-data; name="data"; filename="posted_file.txt"
+Content-Type: text/plain
+
+This is a basic text file.
+
+-----------------------------1090342838421765724384886199--

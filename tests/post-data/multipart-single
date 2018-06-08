@@ -1,8 +1,6 @@
-Content-Type: multipart/form-data; boundary=xxXXxx
-
 --xxXXxx
-Content-Disposition: form-data; name="variable1"
+Content-Disposition: form-data; name="variable"
 
-This is value #1
---xxXXxx
+This is the only value
+--xxXXxx--
 

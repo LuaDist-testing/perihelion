@@ -1,5 +1,3 @@
-Content-Type: multipart/form-data; boundary=AaA444
-
 --AaA444
 Content-Disposition: form-data; name="variable1"
 
@@ -16,4 +14,4 @@ nginx
 Content-Disposition: form-data; name="foo"
 
 bar
---AaA444
+--AaA444--

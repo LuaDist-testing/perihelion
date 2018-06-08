@@ -1,6 +1,6 @@
 package = "perihelion"
 
-version = "0.4-1"
+version = "0.5-1"
 
 description = {
 	summary = "Perihelion Web Framework",
@@ -14,7 +14,7 @@ description = {
 }
 
 source = {
-	url = "https://zadzmo.org/code/perihelion/downloads/perihelion-0.4.tar.gz"
+	url = "https://zadzmo.org/code/perihelion/downloads/perihelion-0.5.tar.gz"
 }
 
 dependencies = {

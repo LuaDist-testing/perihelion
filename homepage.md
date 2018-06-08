@@ -152,8 +152,8 @@ argument:
   * web:redirect( url ) - Redirects client, using a 302 Found response
   * web:redirect_permanent( url ) - Redirects client using 301
 
-As of version 0.3, reaching the end of a function stream without calling
-a stop method will result in undefined behaviour.
+As of version 0.4, reaching the end of a function stream without calling
+a stop method will result in a 500 error.
 
 
 Requirements
@@ -180,6 +180,13 @@ package.path.
 
 You can download the distribution tarball 
 [here.](https://zadzmo.org/code/perihelion/downloads/)
+
+
+History
+-------
+
+ * v0.3 - First public release
+ * v0.4 - Bugfixes with redirects and POST handling
 
 
 Planned Features 

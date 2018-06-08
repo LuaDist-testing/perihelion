@@ -1,0 +1,14 @@
+-----------------------------1629258943897431117981499424
+Content-Disposition: form-data; name="destination"
+
+https://some.url.to/somewhere
+-----------------------------1629258943897431117981499424
+Content-Disposition: form-data; name="ltype"
+
+download
+-----------------------------1629258943897431117981499424
+Content-Disposition: form-data; name="data"; filename=""
+Content-Type: application/octet-stream
+
+
+-----------------------------1629258943897431117981499424--

@@ -199,7 +199,7 @@ local function decode_get_variables( vstring )
 		value = urldecode(value)
 		ret[name] = value
 	end
-	
+			
 	return ret
       
 end
@@ -210,52 +210,76 @@ end
 -- Take a chunk of a multipart/form-data POST and turn it into
 -- an entry in the POST table.
 --
-local function decode_mime_part( req, message )
+local function decode_mime_part( mime_part )
 
 	--
 	-- There are two parts to a MIME message part: headers and data.
 	-- Split them.
 	--
-	local headers = {}
-	local data = {}
-	local in_headers = true
+	local raw_headers = {}
+	local data = nil
+	--local line_term = "[\n" .. char(0x0D) .. char(0x0A) .. "]"
 	
-	for i, v in ipairs(message) do
-		if in_headers then
-			if v == '' or not v then
-				in_headers = false
-			else
-				headers[ #headers + 1 ] = v
-			end
+	for v, r in split_string( mime_part, "\n" ) do
+	
+		if not v or v:match("^%s*$") then
+			data = r
+			break
 		else
-			data[ #data + 1 ] = v
+			raw_headers[ #raw_headers + 1 ] = v
 		end
 	
 	end
 	
+	--
+	-- Kill the remaining newline at the beginning of the data field.
+	--
+	if data then
+		data = data:gsub('^(%s*)', '')
+	end
 	
 	--
-	-- The only thing we need in the headers is the variable name.
+	-- Extract header data
 	--
-	local name = ''
-	for i, v in ipairs(headers) do
-		local m = string.match(v, 'Content%-Disposition: form%-data; name="([^"]-)"')
+	local decoded = {}
+	local function headercheck( headers, field )
+		local c = string.match(field, 'Content%-Type: (.*)$')
+		if c then
+			decoded.content = c:gsub("(%s*)$", "")
+		end
+		
+		local name = string.match(field, 'Content%-Disposition: form%-data; name="([^"]-)"%s*$')
+		if name then
+			decoded.name = name
+			decoded.isfile = false
+			return
+		end
+		
+		local m, n = string.match(field, 'Content%-Disposition: form%-data; name="([^"]-)"; filename="([^"]-)"')
 		if m then
-			name = m
+			decoded.name = m
+			decoded.filename = n:gsub("(%s*)$", "")
+			decoded.isfile = true
+			return
 		end
 	end
+	
 
-
-	if not name or name == '' then
-		return	
+	for i, v in ipairs(raw_headers) do
+		headercheck( raw_headers, v )
+	end
+	
+	if not decoded.name or decoded.name == '' then
+		return nil
 	end
 
 
 	--
-	-- Glue our variable together.
+	-- Precisely one line terminator at the end.
 	--
-	req.POST[name] = table.concat(data)
-	return
+	decoded.value = data:gsub('(%s?%s)$', "")
+
+	return decoded
 
 end
 
@@ -264,60 +288,33 @@ end
 ---
 -- Break up a multipart/form-data POST request.
 --
-local function decode_post_multipart( data, req )
+local function decode_post_multipart( data, bound )
 
-	local iter = split_string(data, "\n")
-	local line = iter()
-	local boundary
+	local ret = {}
+	bound = "--" .. bound
+	local escaped_bound = bound:gsub('%-', '%%-')
 	
-		
 	--
-	-- Find the boundary delimiter.
+	-- Need to find the first chunk, which will be after the
+	-- first delimiter. Advance the iterator once and throw it away.
 	--
-	if not string.match(line, "^Content%-Type: multipart/form%-data;") then
-		return
-	end
-	
-	bound = '--' .. tostring(string.match(line, "boundary%=(.-)$"))
-		
-	--
-	-- Go line by line until we burn our content-length.
-	--
-	local advance = function()
-		local segment = {}
-		local line = iter()
-	
-		while line and line ~= bound do
-			if line ~= bound then
-				segment[ #segment + 1 ] = line
-			end
+	for mime_part in split_string( data, escaped_bound ) do
+		if mime_part and #mime_part > 1 then
 			
-			line = iter()
+			-- cut off the delimiter in the beginning, string_split
+			-- leaves it there. Kill beginning new lines.
+			mime_part = mime_part:sub( #bound )
+			mime_part = mime_part:gsub("^(%s*)", "")
+				
+			local decoded = decode_mime_part(mime_part)
+				
+			if decoded then		
+				ret[ #ret + 1 ] = decoded
+			end
 		end
-
-		return segment
 	end
 	
-	--
-	-- Find the first boundary, to get past the MIME header.
-	--
-	advance()
-	
-	--
-	-- Everything past here is data.
-	--
-	-- It appears it takes three lines to make a valid MIME message:
-	-- a header, an empty line, data. I hope this holds in the real
-	-- world.
-	--
-	local mime_part = advance()
-
-	while #mime_part > 2 do 
-	
-		decode_mime_part(req, mime_part)
-		mime_part = advance()
-		
-	end
+	return ret
 
 end
 
@@ -339,12 +336,13 @@ local function decode_post_variables( req )
 	-- this thing to work.
 	--
 	local len = tonumber(req.CONTENT_LENGTH) or 0
+	local ctype = req.CONTENT_TYPE
 	local data = req.input:read(len)
-
+	
 	--
 	-- Easy, it's the same as GET.
 	--
-	if req.CONTENT_TYPE == 'application/x-www-form-urlencoded' then
+	if ctype == 'application/x-www-form-urlencoded' then
 		
 		req.POST = decode_get_variables( data )
 		req.POST_RAW = nil
@@ -355,11 +353,28 @@ local function decode_post_variables( req )
 	--
 	-- Much harder. Thanks, HTML4, for causing this pain.
 	--
-	if req.CONTENT_TYPE == 'multipart/form-data' then
+	if string.match(ctype, "^multipart/form%-data;") then
 	
+		local bound = string.match(ctype, "boundary%=([%w%-]+)")
+		local vars = decode_post_multipart( data, bound )
+		
 		req.POST = {}
 		req.POST_RAW = nil
-		decode_post_multipart( data, req )
+		req.FILE = {}
+			
+		for i, var in ipairs(vars) do
+		
+			if not var.isfile then
+				req.POST[var.name] = var.value
+			else
+				req.FILE[var.name] = {
+					['CONTENT-TYPE'] = var.content,
+					['DATA'] = var.value,
+					['FILENAME'] = var.filename
+				}
+			end
+		end
+		
 		return
 		
 	end
@@ -766,6 +781,7 @@ local function handle_request( self, request_env )
 			'SCRIPT_NAME',
 			'QUERY_STRING',
 			'REMOTE_ADDR',
+			'REMOTE_USER',
 			'CONTENT_TYPE',
 			'CONTENT_LENGTH',
 			'APP_PATH',
@@ -966,13 +982,13 @@ local _M = {}
 ---
 -- Version number of this copy of Perihelion.
 --
-_M._VERSION = "0.4"
+_M._VERSION = "0.5"
 
 
 ---
 -- Release date of this copy of Perihelion.
 --
-_M._RELEASE = "2017.0901"
+_M._RELEASE = "2017.0909"
 
 
 ---
