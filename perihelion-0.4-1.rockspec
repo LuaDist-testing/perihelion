@@ -2,7 +2,7 @@
 
 package = "perihelion"
 
-version = "0.3-1"
+version = "0.4-1"
 
 description = {
 	summary = "Perihelion Web Framework",
@@ -17,12 +17,12 @@ description = {
 
 -- LuaDist source
 source = {
-  tag = "0.3-1",
+  tag = "0.4-1",
   url = "git://github.com/LuaDist-testing/perihelion.git"
 }
 -- Original source
 -- source = {
--- 	url = "https://zadzmo.org/code/perihelion/downloads/perihelion-0.3.tar.gz"
+-- 	url = "https://zadzmo.org/code/perihelion/downloads/perihelion-0.4.tar.gz"
 -- }
 
 dependencies = {

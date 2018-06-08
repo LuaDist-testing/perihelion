@@ -33,7 +33,7 @@ Then, create streams that a request will call. The following returns
 	
 	end
 
-	app:get "/index" { index() }
+	app:get "/index" { index }
 	return app
 	
 GET and POST requests are supported. PUT and DELETE may be added in a 

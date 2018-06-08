@@ -344,7 +344,7 @@ local function decode_post_variables( req )
 	--
 	-- Easy, it's the same as GET.
 	--
-	if req.CONTENT_TYPE == 'x-www-form-urlencoded' then
+	if req.CONTENT_TYPE == 'application/x-www-form-urlencoded' then
 		
 		req.POST = decode_get_variables( data )
 		req.POST_RAW = nil
@@ -450,7 +450,8 @@ local function set_route( app, method, path )
 			-- a valid way to end the HTTP request.
 			--
 			local uri, get_vars = parse_uri( request_env.PATH_INFO )
-			local vars = {}
+			
+			request_env.vars = {}
 			
 			request_env.GET = decode_get_variables(
 					request_env._GET_VARIABLES
@@ -464,13 +465,18 @@ local function set_route( app, method, path )
 				
 			for i, v in ipairs(handlers) do
 					
-				request_env.vars = vars
-					
 				local output, headers, iter = v( request_env, ... )
 				if type(output) == 'table' then
 					vars = output
-				else
+				elseif type(output) == 'string' 
+						or type(output) == 'number' then
 					return output, headers, iter
+				else
+					error("Undefined output")
+				end
+					
+				for k, v in pairs(output) do
+					request_env.vars[k] = v
 				end
 					
 			end
@@ -481,6 +487,28 @@ local function set_route( app, method, path )
 			)
 		end
 	end
+
+end
+
+
+---
+-- Tells Perihelion that this application is running under
+-- a prefix that must be removed before routing a web request.
+--
+function _methods.prefix( self, path )
+
+	--
+	-- Prefix must start with '/' and not end with '/'.
+	--
+	if path:sub(1, 1) ~= '/' then
+		error("Invalid prefix: must start with '/'")
+	end
+	
+	if path:sub(-1) == '/' then
+		path = path:sub(1, #path - 1 )
+	end
+
+	self._prefix = compress_path( path )
 
 end
 
@@ -560,7 +588,7 @@ local function request_end( return_code, headers, output )
 		error("Requested return code not implemented")
 	end
 	
-	return	tostring(return_code) .. " " .. _codes[return_code],
+	return	tonumber(return_code) .. " " .. _codes[return_code],
 			headers,
 			coroutine.wrap(function()
 			
@@ -643,6 +671,8 @@ function _int_methods.redirect( self, url )
 		error("Redirect without destination")
 	end
 	
+	self.headers['Location'] = url
+	
 	return request_end( 
 		302, self.headers, 
 		output or "<html><body><a href=" .. url .. "</a></body></html>" 
@@ -659,6 +689,8 @@ function _int_methods.redirect_permanent( self, url )
 	if (not url) or (type(url) ~= 'string') then
 		error("Redirect without destination")
 	end
+	
+	self.headers['Location'] = url
 	
 	return request_end( 
 		301, self.headers, 
@@ -718,6 +750,9 @@ local function handle_request( self, request_env )
 	-- XXX: Xavante does some wierd insanity with metamethods. Gotta
 	-- explicitly initialize most vars before pairs() will see them.
 	--
+	-- Maybe Perihelion should detect if this is necessary and optimize
+	-- it out otherwise.
+	--
 	local cgi_vars = {     
 			'SERVER_SOFTWARE',
     		'SERVER_NAME',
@@ -767,6 +802,20 @@ local function handle_request( self, request_env )
 	
 	
 	--
+	-- Remove any specified prefix.
+	--
+	if self._prefix ~= '/' then
+
+		local prefix_test = string.sub( uri, 1, #(self._prefix) )
+
+		if prefix_test == self._prefix then
+			uri = string.sub( uri, #(self._prefix) + 1 )
+		end
+		
+	end
+	
+	
+	--
 	-- Let's go find a path.
 	--
 	success, err = pcall( function()
@@ -792,7 +841,11 @@ local function handle_request( self, request_env )
 				local xpath = path
 				local xuri = uri
 				
-				local i = 25
+				--
+				-- This integer controls how deep Perihelion will look
+				-- into a URL. 25 seems reasonable to me...
+				--
+				local i = 25 
 				repeat 
 					local ustart, uend = string.find(xuri, xpath)
 					local pstart, pend = string.find(xpath, "%b()")
@@ -913,13 +966,13 @@ local _M = {}
 ---
 -- Version number of this copy of Perihelion.
 --
-_M._VERSION = "0.3"
+_M._VERSION = "0.4"
 
 
 ---
 -- Release date of this copy of Perihelion.
 --
-_M._RELEASE = "2017.0814"
+_M._RELEASE = "2017.0901"
 
 
 ---
@@ -928,7 +981,8 @@ _M._RELEASE = "2017.0814"
 function _M.new( )
 
 	local ret = {
-		routes = {}
+		routes = {},
+		_prefix = "/"
 	}
 	
 	for k, v in pairs( _methods ) do

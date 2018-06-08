@@ -529,8 +529,8 @@ function test_post_urlencoded()
 			
 	end, finish }
 	
-	local req = request( "POST", "/location", nil, "", "single-var")	
-	req.CONTENT_TYPE = 'x-www-form-urlencoded'
+	local req = request( "POST", "/location", nil, "", "single-var")
+	req.CONTENT_TYPE = 'application/x-www-form-urlencoded'
 	
 	local x, y, z = ph.run( req )
 	assert_200(x, y, z)
@@ -556,7 +556,7 @@ function test_post_urlencoded_multi()
 	end, finish }
 	
 	local req = request( "POST", "/location", nil, "", "double-var")
-	req.CONTENT_TYPE = 'x-www-form-urlencoded'
+	req.CONTENT_TYPE = 'application/x-www-form-urlencoded'
 	
 	local x, y, z = ph.run( req )
 	assert_200(x, y, z)
@@ -879,7 +879,8 @@ function test_return_302()
 	local code, headers, iter = ph.run( request( "GET", "/" ) )
 	
 	assert.is_equal("302 Found", code)
-	assert.is_string(headers['Content-type'])
+	assert.is_string(headers['Location'])
+	assert.is_equal("/somewhere", headers['Location'])
 	assert_response( code, headers, iter )
 
 end
@@ -918,7 +919,8 @@ function test_return_301()
 	local code, headers, iter = ph.run( request( "GET", "/" ) )
 
 	assert.is_equal("301 Moved Permanently", code)
-	assert.is_string(headers['Content-type'])
+	assert.is_string(headers['Location'])
+	assert.is_equal("/somewhere", headers['Location'])
 	assert_response( code, headers, iter )
 
 end
@@ -943,6 +945,101 @@ function test_return_301_failure2()
 	local ph = perihelion.new()
 	ph:get "/" { function( web ) return web:redirect_permanent( {} ) end }
 	assert_500(ph.run( request( "GET", "/" ) ))
+	
+end
+
+
+--
+-- Prove that return values are folded into web.vars.
+--
+function test_return_values_saved()
+
+	local ph = perihelion.new()
+	ph:get "/" {
+		function( web ) 
+			return { one = 1 } 
+		end,
+		
+		function( web ) 
+			assert.is_equal(1, web.vars.one) 
+			return { two = 2 }
+		end,
+		
+		function( web)
+			assert.is_equal(1, web.vars.one) 
+			assert.is_equal(2, web.vars.two)
+			return web:ok("done")
+		end
+	}
+
+	assert_200(ph.run( request( "GET", "/") ))
+
+end
+
+
+--
+-- Test that a 500 error is thrown if a proper ending function
+-- isn't called.
+--
+function test_end_correctness()
+
+	local ph = perihelion.new()
+	ph:get "/" {
+		function( web ) 
+			return { one = 1 } 
+		end
+	}
+	
+	assert_500(ph.run( request( "GET", "/") ))
+	
+end
+
+
+--
+-- Test prefix stripping.
+--
+function test_prefix_strip()
+
+	local ph = perihelion.new()
+	ph:get "/" {
+		function( web ) 
+			return web:ok("Done!")	
+		end 
+	}
+
+	ph:prefix("/testprefix")
+	assert_200(ph.run( request( "GET", "/testprefix/" ) ))
+
+end
+
+
+--
+-- Test prefix that a prefix is properly truncated, if need be
+--
+function test_prefix_strip_withslash()
+
+	local ph = perihelion.new()
+	ph:get "/" {
+		function( web ) 
+			return web:ok("Done!")	
+		end 
+	}
+
+	ph:prefix("/testprefix/")
+	assert_200(ph.run( request( "GET", "/testprefix/" ) ))
+
+end
+
+
+--
+-- Prove prefixes are enforced to be sane.
+--
+function test_prefix_sanity()
+
+	local ph = perihelion.new()
+	assert.is_error(function()
+		ph:prefix("emfkemkef")
+	end)
 	
 end
 
@@ -990,9 +1087,14 @@ describe("Perihelion", function()
 	it( "Has a function to send a 404 response", test_return_404 )
 	it( "Has a function to redirect", test_return_302 )
 	it( "Has a function to redirect permanently", test_return_301 )
-	it( "Requires an argument for 301 redirects", test_return_301_failure1)
-	it( "Requires an argument for 302 redirects", test_return_302_failure1)
-	it( "Requres a string for 301 redirects", test_return_301_failure2)
-	it( "Requres a string for 302 redirects", test_return_302_failure2)
+	it( "Requires an argument for 301 redirects", test_return_301_failure1 )
+	it( "Requires an argument for 302 redirects", test_return_302_failure1 )
+	it( "Requres a string for 301 redirects", test_return_301_failure2 )
+	it( "Requres a string for 302 redirects", test_return_302_failure2 )
+	it( "Folds return values into web.vars", test_return_values_saved )
+	it( "Returns 500 if a request doesn't end right", test_end_correctness )
+	it( "Can strip off a prefix if need be", test_prefix_strip )
+	it( "Can strip off a prefix if need be", test_prefix_strip_withslash )
+	it( "Can check prefix sanity", test_prefix_sanity )
 	
 end)
